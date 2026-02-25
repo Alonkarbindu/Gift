@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Gift for Sadia</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: black; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<script>
+let scene, camera, renderer, particles;
+let particleSystem;
+let handX = 0, handY = 0;
+let expansion = 1;
+let currentShape = "heart";
+
+init();
+animate();
+
+function init() {
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.z = 5;
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  createParticles("heart");
+  initHandTracking();
+}
+
+function createParticles(type) {
+  if (particleSystem) scene.remove(particleSystem);
+
+  const geometry = new THREE.BufferGeometry();
+  const count = 4000;
+  const positions = new Float32Array(count * 3);
+
+  for (let i = 0; i < count; i++) {
+    const i3 = i * 3;
+    const t = Math.random() * Math.PI * 2;
+    const r = Math.random();
+
+    if (type === "heart") {
+      const x = 16 * Math.pow(Math.sin(t), 3);
+      const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+      positions[i3] = x * 0.05;
+      positions[i3+1] = y * 0.05;
+      positions[i3+2] = (Math.random() - 0.5) * 0.5;
+    }
+
+    if (type === "flower") {
+      const k = 5;
+      const radius = Math.cos(k*t);
+      positions[i3] = radius * Math.cos(t);
+      positions[i3+1] = radius * Math.sin(t);
+      positions[i3+2] = (Math.random()-0.5)*0.5;
+    }
+
+    if (type === "saturn") {
+      const ring = Math.random() * 2 + 1;
+      positions[i3] = ring * Math.cos(t);
+      positions[i3+1] = (Math.random()-0.5)*0.2;
+      positions[i3+2] = ring * Math.sin(t);
+    }
+
+    if (type === "fireworks") {
+      positions[i3] = (Math.random()-0.5)*3;
+      positions[i3+1] = (Math.random()-0.5)*3;
+      positions[i3+2] = (Math.random()-0.5)*3;
+    }
+  }
+
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
+  const material = new THREE.PointsMaterial({
+    size: 0.03,
+    vertexColors: false,
+    color: 0xff00ff
+  });
+
+  particleSystem = new THREE.Points(geometry, material);
+  scene.add(particleSystem);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (particleSystem) {
+    particleSystem.rotation.y += 0.002;
+    particleSystem.scale.set(expansion, expansion, expansion);
+    particleSystem.position.x = handX;
+    particleSystem.position.y = handY;
+  }
+
+  renderer.render(scene, camera);
+}
+
+function initHandTracking() {
+    const video = document.createElement("video");
+    video.style.display = "none";
+    document.body.appendChild(video); // VERY IMPORTANT
+  
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+        video.play();
+      })
+      .catch(err => {
+        console.error("Camera error:", err);
+        alert("Camera access denied or not working.");
+      });
+  
+    const hands = new Hands({
+      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+  
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5
+    });
+  
+    hands.onResults(results => {
+      if (results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+  
+        handX = (landmarks[9].x - 0.5) * 10;
+        handY = -(landmarks[9].y - 0.5) * 6;
+  
+        const dx = landmarks[4].x - landmarks[8].x;
+        const dy = landmarks[4].y - landmarks[8].y;
+        const distance = Math.sqrt(dx*dx + dy*dy);
+  
+        expansion = THREE.MathUtils.lerp(expansion, distance < 0.05 ? 2 : 1, 0.1);
+  
+        const hue = landmarks[9].y;
+        particleSystem.material.color.setHSL(hue, 1, 0.5);
+      }
+    });
+  
+    video.onloadeddata = () => {
+      const cameraFeed = new Camera(video, {
+        onFrame: async () => {
+          await hands.send({ image: video });
+        },
+        width: 640,
+        height: 480
+      });
+      cameraFeed.start();
+    };
+  }
+window.addEventListener("keydown", (e) => {
+  if (e.key === "1") createParticles("heart");
+  if (e.key === "2") createParticles("flower");
+  if (e.key === "3") createParticles("saturn");
+  if (e.key === "4") createParticles("fireworks");
+});
+</script>
+
+</body>
+</html>
